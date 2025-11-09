@@ -87,6 +87,7 @@ function renderButtons(tabId, status) {
 }
 
 }
+
 // Main function to check state on popup open
 chrome.tabs.query(tabQuery, (tabs) => {
   if (tabs.length === 0) return;

@@ -15,29 +15,35 @@ if (!window.__locatorCaptureInjected__) {
       switch (type.toLowerCase()) {
         case 'id':
           elements = document.querySelectorAll(`#${CSS.escape(locatorValue)}`);
+          //console.log("compared id");
           return elements.length === 1;
 
-        case 'name':
-          elements = document.querySelectorAll(`[name="${CSS.escape(locatorValue)}"]`);
+        case 'name':-simple
+          elements = document.getElementsByName(locatorValue);
+          //console.log("compared Name");
           return elements.length === 1;
 
         case 'classname':
         case 'class':
           elements = document.getElementsByClassName(locatorValue);
+          //console.log("compared class");
           return elements.length === 1;
 
         case 'tagname':
         case 'tag':
           elements = document.getElementsByTagName(locatorValue);
+          //console.log("compared tag");
           return elements.length === 1;
 
         case 'css':
           elements = document.querySelectorAll(locatorValue);
+          //console.log("compared css")
           return elements.length === 1;
 
         case 'xpath':
         default:
           const xpathResult = document.evaluate(locatorValue, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+          //console.log("compared xpath");
           return xpathResult.snapshotLength === 1;
       }
     } catch (e) {
@@ -65,9 +71,9 @@ if (!window.__locatorCaptureInjected__) {
     if (tag === 'a') return 'Link';
     if (tag.match(/^h[1-6]$/)) return 'Heading';
     if (tag === 'img') return 'Image';
-    if (['p', 'span', 'div'].includes(tag)) return 'Text/Container';
-    
-    return tag;
+    if (['p', 'span', 'div'].includes(tag)) return 'Text';
+
+    return 'N/A';
   }
 
   // --- Helper Function: Get Display Name ---
@@ -86,8 +92,6 @@ if (!window.__locatorCaptureInjected__) {
 
   // --- Helper Function: Generates a reliable, relative XPath ---
   function getRelativeXPath(element) {
-    if (element.id) return `//${element.tagName.toLowerCase()}[@id='${element.id}']`;
-    if (element.name) return `//${element.tagName.toLowerCase()}[@name='${element.name}']`;
 
     let path = '';
     while (element && element.tagName && element.tagName.toLowerCase() !== 'body') {
@@ -106,62 +110,98 @@ if (!window.__locatorCaptureInjected__) {
   }
 
   // --- Core Function: Generate All Unique Locators ---
-  function generateLocator(element) {
+function generateLocator(element) {
+
+    const alphanumericLikeRegex = /^[a-zA-Z _\-!@]+$/;
+
+    let eleName=getDisplayName(element);
+    let eleType=getElementType(element);
+    
+    if (eleName === 'N/A' || eleType === 'N/A') {
+          eleName=prompt("Element Name:");
+          eleType=prompt("Element Type:");
+    }
+
     const data = {
-      elementName: getDisplayName(element),
-      elementType: getElementType(element),
+      elementName: eleName,
+      elementType: eleType,
       uniqueLocators: []
     };
 
     let potentialLocators = [];
 
-    if (element.tagName) potentialLocators.push({ type: 'tagName', value: element.tagName });
-    if (element.id) potentialLocators.push({ type: 'id', value: element.id });
-    if (element.name) potentialLocators.push({ type: 'name', value: element.name });
+    potentialLocators.push({ type: 'tagName', value: element.tagName });
 
-    if (element.className) {
-      const classes = element.className.trim().split(/\s+/).filter(cls => cls.length > 0);
-      console.log(element.className);
-      if (classes.length == 1 && classes[0] !="locator-highlight") 
+    const idAttr = element.getAttribute('id');
+    const nameAttr = element.getAttribute('name');
+    const classAttr = element.getAttribute('class');
+
+    if (idAttr !== null && alphanumericLikeRegex.test(idAttr)) 
       {
-        console.log(classes[0]);
-        potentialLocators.push({ type: 'class', value: element.className });
-      }   
+        potentialLocators.push({ type: 'id', value: idAttr });
+      }
+    else
+    {
+      console.log("id:"+idAttr);
+    }
+    if (nameAttr !== null && alphanumericLikeRegex.test(nameAttr)) {
+      potentialLocators.push({ type: 'name', value: nameAttr });
+    }
+    else
+    {
+      console.log("name:"+nameAttr);
     }
 
-    const attrs=element.getAttributeNames();
-    const removeList = ["id", "class","name"];
+    if (classAttr !== null) {
+      let classXpaths = generateClassXpathLocator(element, element.tagName);
+      if (classXpaths !== null) {
+        classXpaths.forEach(cXpath => {
+          potentialLocators.push({ type: 'xpath', value: cXpath });
+        });
+      }
+    }
+    else
+    {
+      console.log("Class:"+classAttr);
+    }
+
+    const attrs = element.getAttributeNames();
+    const removeList = ["id", "class", "name"];
     const filteredAttrs = attrs.filter(attr => !removeList.includes(attr));
+    console.log(filteredAttrs);
 
-    if(filteredAttrs > 0)
-    {
+
+    if (filteredAttrs.length > 0) {
       filteredAttrs.forEach(attributeName => {
-          let locVal=element.tagName+"["+attributeName+"='"+element.getAttribute(attributeName)+"']";
-          potentialLocators.push({ type: 'css', value: locVal });
+        const attrVal=element.getAttribute(attributeName);
+        
+        if (alphanumericLikeRegex.test(attrVal)) {
+          console.log(attrVal);
+          let locVal1 = "//" + element.tagName + "[@" + attributeName + "='" + element.getAttribute(attributeName) + "']";
+          potentialLocators.push({ type: 'xpath', value: locVal1 });
+        }
       });
     }
-    if(filteredAttrs > 0)
-    {
-      filteredAttrs.forEach(attributeName => {
-          let locVal="//"+element.tagName+"[@"+attributeName+"='"+element.getAttribute(attributeName)+"']";
-          potentialLocators.push({ type: 'xpath', value: locVal });
-      });
-    }
-
 
     const textContent = (element.textContent || '').trim();
     if (textContent.length > 0) {
-      let textVal="//"+element.tagName+"[normalize-space(.)='"+element.textContent.trim()+"']";
+      let textVal = "//" + element.tagName + "[normalize-space(.)='" + element.textContent.trim() + "']";
+      console.log(textVal);
       potentialLocators.push({ type: 'xpath', value: textVal });
     }
 
     const relativeXPath = getRelativeXPath(element);
-    
+
+    potentialLocators.forEach(loc => {
+      console.log(loc.value);
+    });
+
     potentialLocators.forEach(locator => {
       if (isUnique(locator.type, locator.value)) {
         data.uniqueLocators.push(locator);
       }
     });
+    console.log(data);
 
     if (data.uniqueLocators.length === 0) {
       data.uniqueLocators.push({
@@ -171,6 +211,40 @@ if (!window.__locatorCaptureInjected__) {
     }
 
     return data;
+  }
+
+  function generateClassXpathLocator(element, tagName) {
+    const classAttr = element.getAttribute('class');
+    let xpaths = [];
+
+    if (!classAttr || classAttr.trim() === '') {
+      console.log("No class attribute");
+      return xpaths;
+    }
+    const classNames = classAttr.trim().split(/\s+/).filter(name => name.length > 0);
+
+    const alphanumericLikeRegex = /^[a-zA-Z _\-!@]+$/;
+    const filteredClassNames = classNames.filter(name => {
+      return alphanumericLikeRegex.test(name);
+    });
+
+    const uniqueFilteredClassNames = Array.from(new Set(filteredClassNames));
+    const valueToRemove = 'locator-highlight';
+    const finalClassNames = uniqueFilteredClassNames.filter(className =>
+      className !== valueToRemove
+    );
+
+    // --- XPath Generation Logic ---
+  if (finalClassNames.length === 1) {
+      const classValue = finalClassNames[0];  
+      xpaths.push(`//${tagName}[@class='${classValue}']`); 
+    }
+    
+    finalClassNames.forEach(classValue => {
+      xpaths.push(`//${tagName}[contains(@class,'${classValue}')]`);
+    });
+
+    return Array.from(new Set(xpaths));
   }
 
   // --- Event Handlers ---
@@ -186,13 +260,21 @@ if (!window.__locatorCaptureInjected__) {
     element.classList.add('locator-highlight');
   }
 
-  function captureLocator(event) {
+function captureLocator(event) {
     if (!isCapturing || isPaused) return;
     event.preventDefault();
     event.stopPropagation();
 
     const element = event.target;
     let locatorData = generateLocator(element);
+
+    if (!locatorData) {
+        // Remove the temporary highlight for a canceled capture
+        element.style.outline = 'none'; 
+        element.classList.remove('locator-highlight');
+        return; 
+    }
+
     capturedLocators.push(locatorData);
 
     element.style.outline = '3px solid green';
@@ -228,7 +310,7 @@ if (!window.__locatorCaptureInjected__) {
 
   function stopCapturing() {
     isCapturing = false;
-    isPaused=false;
+    isPaused = false;
     document.removeEventListener('mouseover', highlightElement);
     document.removeEventListener('click', captureLocator, true);
     document.querySelectorAll('.locator-highlight').forEach(el => {
